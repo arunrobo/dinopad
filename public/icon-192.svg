@@ -1,0 +1,56 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3a8a2e"/>
+      <stop offset="100%" stop-color="0f2a0b"/>
+    </linearGradient>
+    <linearGradient id="dg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5dd44d"/>
+      <stop offset="100%" stop-color="#3a9040"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="192" height="192" rx="40" fill="#1f5c18"/>
+  <rect width="192" height="192" rx="40" fill="url(#bg)" opacity="0.7"/>
+  <!-- Ground -->
+  <rect x="0" y="150" width="192" height="42" rx="0" fill="#174512" opacity="0.8"/>
+  <rect x="0" y="148" width="192" height="8" rx="2" fill="#2d7a22" opacity="0.6"/>
+
+  <!-- Stegosaurus body -->
+  <ellipse cx="112" cy="122" rx="55" ry="36" fill="url(#dg)"/>
+  <!-- Neck -->
+  <path d="M72 130 Q68 95 74 78 Q82 60 90 72 Q84 90 80 130 Z" fill="url(#dg)"/>
+  <!-- Head -->
+  <ellipse cx="82" cy="67" rx="22" ry="17" fill="url(#dg)"/>
+  <!-- Snout -->
+  <ellipse cx="98" cy="74" rx="11" ry="8" fill="#4cc040"/>
+  <!-- Nostril -->
+  <circle cx="103" cy="72" r="2" fill="#2a7030" opacity="0.7"/>
+  <!-- Eye -->
+  <circle cx="76" cy="62" r="7" fill="white"/>
+  <circle cx="77" cy="62" r="4" fill="#111"/>
+  <circle cx="75" cy="60" r="1.5" fill="white"/>
+  <!-- Brow -->
+  <path d="M70 57 Q77 54 83 57" stroke="#2a7030" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Spine plates -->
+  <polygon points="88,104 95,72 102,104" fill="#FFD700"/>
+  <polygon points="103,102 111,66 119,102" fill="#FFD700"/>
+  <polygon points="118,104 124,74 130,104" fill="#FFD700"/>
+  <polygon points="131,108 136,82 141,108" fill="#FFAA00"/>
+
+  <!-- Tail -->
+  <path d="M165 132 Q190 120 190 145 Q178 140 165 140 Z" fill="url(#dg)"/>
+
+  <!-- Legs -->
+  <rect x="84" y="148" width="18" height="18" rx="6" fill="#3a9040"/>
+  <rect x="116" y="148" width="18" height="18" rx="6" fill="#3a9040"/>
+
+  <!-- Stars -->
+  <circle cx="28" cy="26" r="3.5" fill="#FFD700" opacity="0.9"/>
+  <circle cx="168" cy="32" r="4.5" fill="#FFD700" opacity="0.9"/>
+  <circle cx="18" cy="62" r="2" fill="#FFD700" opacity="0.7"/>
+  <circle cx="178" cy="68" r="2.5" fill="#FFD700" opacity="0.7"/>
+  <circle cx="155" cy="18" r="2" fill="#fff" opacity="0.5"/>
+  <circle cx="40" cy="50" r="1.5" fill="#fff" opacity="0.4"/>
+</svg>
