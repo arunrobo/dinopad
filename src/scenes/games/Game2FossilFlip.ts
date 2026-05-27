@@ -110,7 +110,7 @@ export function createGame2(): GameInstance {
               const c1 = cards[firstCard!], c2 = cards[secondCard];
               if (c1.pairId === c2.pairId) {
                 c1.matched = true; c2.matched = true; matchedCount++; cp.score++;
-                stats.get(cp.id)!.pairs++; audioManager.play('powerup'); turnMessage = 'MATCH! 🎉 Go again!';
+                stats.get(cp.id)!.pairs++; audioManager.play('match'); turnMessage = 'MATCH! 🎉 Go again!';
                 for (let pi = 0; pi < 24; pi++) { particles.push(createParticle(c1.x, c1.y, cp.color)); particles.push(createParticle(c2.x, c2.y, cp.color)); }
                 matchPulseTimer = 0.7; lastMatchedPair = [c1.id, c2.id];
                 [c1, c2].forEach(mc => { const rc = [cp.color, '#FFD700', '#ffffff']; for (let ri = 0; ri < 3; ri++) ringBursts.push({ x: mc.x, y: mc.y, targetR: mc.w * (0.45 + ri * 0.38), life: 0.5, maxLife: 0.5, color: rc[ri] }); });

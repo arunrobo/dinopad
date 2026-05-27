@@ -140,7 +140,7 @@ export function createGame3(): GameInstance {
           moveTimer -= dt;
           if (moveTimer <= 0 && moveStepsLeft > 0) {
             const pos = Math.min((positions.get(currentMovingId) || 0) + 1, TRACK_LEN - 1);
-            positions.set(currentMovingId, pos); moveStepsLeft--; moveTimer = 0.22; audioManager.play('tap');
+            positions.set(currentMovingId, pos); moveStepsLeft--; moveTimer = 0.22; audioManager.play('step');
             if (pos >= TRACK_LEN - 1) moveStepsLeft = 0;
           }
           if (moveStepsLeft <= 0 && moveTimer <= 0) { phase = 'event'; eventTimer = 0; }
@@ -157,12 +157,12 @@ export function createGame3(): GameInstance {
             switch (tile.type) {
               case 'eggBonus': {
                 const b = randInt(2, 3); positions.set(currentMovingId, Math.min(pos + b, TRACK_LEN - 1));
-                addStat(cp.id, 'bonuses', 1); audioManager.play('rescue'); turnMessage = `Egg bonus! +${b}! 🥚`;
+                addStat(cp.id, 'bonuses', 1); audioManager.play('milestone'); turnMessage = `Egg bonus! +${b}! 🥚`;
                 for (let i = 0; i < 8; i++) particles.push(createParticle(tp.x, tp.y, '#FFD700')); tile.type = 'normal'; break;
               }
               case 'pteraLift': {
                 const l = randInt(3, 5); positions.set(currentMovingId, Math.min(pos + l, TRACK_LEN - 1));
-                addStat(cp.id, 'bonuses', 1); audioManager.play('jump'); turnMessage = `Pterodactyl lift! +${l}! 🐉`;
+                addStat(cp.id, 'bonuses', 1); audioManager.play('milestone'); turnMessage = `Pterodactyl lift! +${l}! 🐉`;
                 for (let i = 0; i < 10; i++) particles.push(createParticle(tp.x, tp.y, '#26C6DA')); tile.type = 'normal'; break;
               }
               case 'lavaRock':

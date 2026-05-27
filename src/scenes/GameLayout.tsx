@@ -66,6 +66,7 @@ export default function GameLayout() {
       boardTheme: settings.boardTheme,
     };
     game.init(cfg, rect.width, rect.height);
+    audioManager.startMusic();
     turnTimerRef.current = settings.turnTimer;
     setPlayerStates(players);
 
@@ -127,6 +128,7 @@ export default function GameLayout() {
 
       // Check finished
       if (g.isFinished()) {
+        audioManager.stopMusic();
         stopGameLoop();
         dispatch({ type: 'SET_RESULTS', results: g.getResults() });
       }
@@ -135,6 +137,7 @@ export default function GameLayout() {
 
   useEffect(() => {
     return () => {
+      audioManager.stopMusic();
       stopGameLoop();
       gameRef.current?.cleanup();
       inputManager.reset();

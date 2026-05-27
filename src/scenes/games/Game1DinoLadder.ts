@@ -270,7 +270,7 @@ export function createGame1(): GameInstance {
           if (moveTimer <= 0 && moveStepsLeft > 0) {
             const cur = positions.get(currentMovingId) || 0;
             const np = Math.min(cur + 1, totalTiles - 1);
-            positions.set(currentMovingId, np); moveStepsLeft--; moveTimer = 0.38; audioManager.play('tap');
+            positions.set(currentMovingId, np); moveStepsLeft--; moveTimer = 0.38; audioManager.play('step');
             if (np >= totalTiles - 1) moveStepsLeft = 0;
           }
           if (moveStepsLeft <= 0 && moveTimer <= 0) phase = 'landEffect';
@@ -292,12 +292,12 @@ export function createGame1(): GameInstance {
             const to = getTilePos(tile.link);
             if (tile.type === 'ladder') {
               positions.set(currentMovingId, tile.link); addStat(cp.id, 'ladders', 1);
-              audioManager.play('rescue'); turnMessage = `Climbed a trail! ${theme.ladderEmoji}`;
+              audioManager.play('climb'); turnMessage = `Climbed a trail! ${theme.ladderEmoji}`;
               climbAnim = { playerId: currentMovingId, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, dur: 1.4 };
               phase = 'climbAnim';
             } else {
               positions.set(currentMovingId, tile.link); addStat(cp.id, 'slides', 1);
-              audioManager.play('oops'); turnMessage = `${theme.slideVerb}! ${theme.slideThing}`;
+              audioManager.play('descend'); turnMessage = `${theme.slideVerb}! ${theme.slideThing}`;
               slideAnim = { playerId: currentMovingId, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, dur: 1.0 };
               phase = 'slideAnim';
             }
