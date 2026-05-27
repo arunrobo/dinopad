@@ -52,7 +52,7 @@ interface Footprint { x: number; y: number; age: number; maxAge: number; angle: 
 interface SlideAnim { playerId: string; fromX: number; fromY: number; toX: number; toY: number; t: number; dur: number; }
 
 interface Tile { idx: number; x: number; y: number; link?: number; type: 'normal' | 'ladder' | 'slide'; }
-type Phase = 'waitTap' | 'rolling' | 'moving' | 'climbAnim' | 'slideAnim' | 'landEffect' | 'finished';
+type Phase = 'waitTap' | 'rolling' | 'moving' | 'climbAnim' | 'slideAnim' | 'landEffect' | 'stayPut' | 'finished';
 
 export function createGame1(): GameInstance {
   let players: PlayerInGame[] = [];
@@ -77,11 +77,13 @@ export function createGame1(): GameInstance {
   let stats = new Map<string, Record<string, number>>();
   let winner: string | null = null;
   let finishDelay = 0;
+  let stayPutTimer = 0;
   let tileSize = 0;
   let boardX = 0;
   let boardY = 0;
   let theme: ThemePalette = THEMES.jungle;
   let boardThemeName = 'jungle';
+  let complexity: 'low' | 'medium' = 'low';
   let globalTime = 0;
 
   // Footprint trails (persistent decoration along ladder paths)
@@ -190,6 +192,7 @@ export function createGame1(): GameInstance {
       players = cfg.players;
       gridSize = cfg.complexity === 'medium' ? 7 : (cfg.kidMode ? 5 : 7);
       totalTiles = gridSize * gridSize;
+      complexity = cfg.complexity ?? 'low';
       theme = THEMES[cfg.boardTheme] || THEMES.jungle;
       boardThemeName = cfg.boardTheme;
       turn = createTurnState(players.map(p => p.side), cfg.turnDirection);
@@ -260,8 +263,15 @@ export function createGame1(): GameInstance {
             if (input && input.holdTime > 0.5 && !usedRoar.has(cp.id)) {
               usedRoar.add(cp.id); diceValue = randInt(1, 6); diceDisplay = diceValue;
               audioManager.play('burst'); turnMessage = `DINO ROAR! → ${diceValue}!`;
-            } else { audioManager.play('powerup'); turnMessage = `Rolled ${diceValue}!`; }
-            currentMovingId = cp.id; moveStepsLeft = diceValue; moveTimer = 0; phase = 'moving'; diceSettleTimer = 0.5;
+            } else { audioManager.play('powerup'); turnMessage = `Rolled ${diceValue}!`; }            // Medium: Stay Put rule — must roll exact number to land on final tile
+            const curPos1 = positions.get(cp.id) || 0;
+            if (complexity === 'medium' && curPos1 + diceValue > totalTiles - 1) {
+              audioManager.play('oops');
+              turnMessage = `Need exactly ${totalTiles - 1 - curPos1} to finish — too high! ⏸️`;
+              diceDisplay = diceValue; diceSettleTimer = 0.5; stayPutTimer = 1.4;
+              floatNums.push({ x: boardX + gridSize * tileSize + 40, y: lastH / 2, text: `${diceValue}`, color: cp.color, life: 1.1, maxLife: 1.1 });
+              phase = 'stayPut'; break;
+            }            currentMovingId = cp.id; moveStepsLeft = diceValue; moveTimer = 0; phase = 'moving'; diceSettleTimer = 0.5;
             floatNums.push({ x: boardX + gridSize * tileSize + 40, y: lastH / 2, text: `${diceValue}`, color: cp.color, life: 1.1, maxLife: 1.1 });
           }
           break;
@@ -274,6 +284,10 @@ export function createGame1(): GameInstance {
             if (np >= totalTiles - 1) moveStepsLeft = 0;
           }
           if (moveStepsLeft <= 0 && moveTimer <= 0) phase = 'landEffect';
+          break;
+        case 'stayPut':
+          stayPutTimer -= dt;
+          if (stayPutTimer <= 0) { turn = advanceTurn(turn); phase = 'waitTap'; turnMessage = 'TAP to roll!'; }
           break;
         case 'landEffect': {
           const pos = positions.get(currentMovingId) || 0;

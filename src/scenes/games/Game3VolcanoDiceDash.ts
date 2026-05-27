@@ -42,6 +42,7 @@ export function createGame3(): GameInstance {
   let players: PlayerInGame[] = [];
   let turn: TurnState;
   let track: TrackTile[] = [];
+  let trackPath: { x: number; y: number }[] = []; // dense smooth path for rendering
   let positions = new Map<string, number>();
   let phase: Phase = 'waitTap';
   let diceValue = 0, diceAnimTimer = 0, diceDisplay = 1;
@@ -65,13 +66,84 @@ export function createGame3(): GameInstance {
 
   function buildTrack(w: number, h: number) {
     lastW = w; lastH = h;
-    const m = Math.min(w, h) * 0.10;
-    const uw = w - m * 2, uh = h - m * 2;
+    const isMedium = complexity === 'medium';
     const oldTypes = track.map(t => t.type);
     track = [];
-    const isMedium = complexity === 'medium';
+
+    // ── Serpentine layout ───────────────────────────────────────────────────
+    // Rows snake left↔right with smooth semicircle turns at each end.
+    const rows = isMedium ? 4 : 3;
+    const mt = h * 0.13;           // top margin (room for avatars floating above tiles)
+    const mb = h * 0.20;           // bottom margin (progress bar + dice area)
+    const uh = h - mt - mb;
+    const rowH = uh / (rows - 1);
+    const R = rowH / 2;            // semicircle turn radius = half row gap
+    const hPad = w * 0.04;         // extra flat padding beyond the arc
+    const ml = R + hPad;
+    const mr = R + hPad;
+    const uw = w - ml - mr;        // width of each straight stretch
+
+    // Build a dense polyline: straight stretches + semicircle turns
+    const dense: { x: number; y: number }[] = [];
+    const SH = 120; // segments per horizontal stretch
+    const ST = 60;  // segments per semicircle turn
+
+    for (let row = 0; row < rows; row++) {
+      const y = mt + row * rowH;
+      const goRight = row % 2 === 0;
+      const x0 = goRight ? ml : ml + uw;
+      const x1 = goRight ? ml + uw : ml;
+
+      // Horizontal stretch (skip duplicated start point on rows > 0)
+      for (let s = (row === 0 ? 0 : 1); s <= SH; s++) {
+        dense.push({ x: x0 + (x1 - x0) * (s / SH), y });
+      }
+
+      // Semicircle turn to the next row
+      if (row < rows - 1) {
+        const yNext = mt + (row + 1) * rowH;
+        const cy = (y + yNext) / 2;
+        if (goRight) {
+          // Turn on the RIGHT — clockwise: top → right → bottom
+          for (let s = 1; s <= ST; s++) {
+            const a = -Math.PI / 2 + (s / ST) * Math.PI;
+            dense.push({ x: x1 + R * Math.cos(a), y: cy + R * Math.sin(a) });
+          }
+        } else {
+          // Turn on the LEFT — counter-clockwise: top → left → bottom
+          for (let s = 1; s <= ST; s++) {
+            const a = -Math.PI / 2 - (s / ST) * Math.PI;
+            dense.push({ x: x1 + R * Math.cos(a), y: cy + R * Math.sin(a) });
+          }
+        }
+      }
+    }
+
+    // Store dense path for smooth road rendering
+    trackPath = dense;
+
+    // Cumulative arc length along the dense path
+    const cumLen: number[] = [0];
+    for (let i = 1; i < dense.length; i++) {
+      const dx = dense[i].x - dense[i - 1].x;
+      const dy = dense[i].y - dense[i - 1].y;
+      cumLen.push(cumLen[i - 1] + Math.sqrt(dx * dx + dy * dy));
+    }
+    const totalLen = cumLen[cumLen.length - 1];
+
+    // Sample trackLen evenly-spaced (by arc length) tile positions
     for (let i = 0; i < trackLen; i++) {
-      const t = i / (trackLen - 1);
+      const target = (i / (trackLen - 1)) * totalLen;
+      let lo = 0, hi = cumLen.length - 1;
+      while (lo < hi - 1) {
+        const mid = (lo + hi) >> 1;
+        if (cumLen[mid] <= target) lo = mid; else hi = mid;
+      }
+      const segLen = cumLen[hi] - cumLen[lo];
+      const frac = segLen > 0 ? (target - cumLen[lo]) / segLen : 0;
+      const x = dense[lo].x + (dense[hi].x - dense[lo].x) * frac;
+      const y = dense[lo].y + (dense[hi].y - dense[lo].y) * frac;
+
       let type: TrackTile['type'] = 'normal';
       if (oldTypes[i]) { type = oldTypes[i]; }
       else if (i > 2 && i < trackLen - 2) {
@@ -80,7 +152,7 @@ export function createGame3(): GameInstance {
         else if (r < (isMedium ? 0.17 : 0.18)) type = 'pteraLift';
         else if (r < (isMedium ? 0.38 : 0.28)) type = 'lavaRock';
       }
-      track.push({ x: m + t * uw, y: h / 2 + Math.sin(t * Math.PI * 3) * uh * 0.25, type });
+      track.push({ x, y, type });
     }
   }
 
@@ -136,6 +208,15 @@ export function createGame3(): GameInstance {
                 if (Math.random() < 0.3) { skipped.add(cp.id); turnMessage += ' + skip next!'; }
               } else { diceValue += bonus; turnMessage = `Risky win! +${bonus} = ${diceValue}!`; audioManager.play('powerup'); }
             } else { addStat(cp.id, 'safeRolls', 1); turnMessage = `Rolled ${diceValue}!`; audioManager.play('powerup'); }
+            // Medium: Stay Put rule — must roll exact number to finish
+            const curPos3 = positions.get(cp.id) || 0;
+            if (complexity === 'medium' && curPos3 + diceValue > trackLen - 1) {
+              audioManager.play('oops');
+              turnMessage = `Need exactly ${trackLen - 1 - curPos3} to finish — too high! ⏸️`;
+              diceDisplay = diceValue; diceSettleTimer = 0.5; eventTimer = 1.4;
+              floatNums.push({ x: lastW - 58, y: lastH * 0.46, text: `${diceValue}`, color: cp.color, life: 1.1, maxLife: 1.1 });
+              phase = 'skipTurn'; break;
+            }
             diceDisplay = diceValue; currentMovingId = cp.id; moveStepsLeft = diceValue; moveTimer = 0; phase = 'moving'; diceSettleTimer = 0.5;
             floatNums.push({ x: lastW - 58, y: lastH * 0.46, text: `${diceValue}`, color: cp.color, life: 1.1, maxLife: 1.1 });
           }
@@ -223,18 +304,19 @@ export function createGame3(): GameInstance {
 
       // ── Track ────────────────────────────────────────────────────────────
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const tp0 = trackPath.length > 0 ? trackPath : track;
       // Shadow
       ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 42;
-      ctx.beginPath(); track.forEach((t, i) => i === 0 ? ctx.moveTo(t.x + 2, t.y + 4) : ctx.lineTo(t.x + 2, t.y + 4)); ctx.stroke();
+      ctx.beginPath(); tp0.forEach((t, i) => i === 0 ? ctx.moveTo(t.x + 2, t.y + 4) : ctx.lineTo(t.x + 2, t.y + 4)); ctx.stroke();
       // Edge/border
       ctx.strokeStyle = th.trackEdge; ctx.lineWidth = 36;
-      ctx.beginPath(); track.forEach((t, i) => i === 0 ? ctx.moveTo(t.x, t.y) : ctx.lineTo(t.x, t.y)); ctx.stroke();
+      ctx.beginPath(); tp0.forEach((t, i) => i === 0 ? ctx.moveTo(t.x, t.y) : ctx.lineTo(t.x, t.y)); ctx.stroke();
       // Main fill
       ctx.strokeStyle = th.trackFill; ctx.lineWidth = 28;
-      ctx.beginPath(); track.forEach((t, i) => i === 0 ? ctx.moveTo(t.x, t.y) : ctx.lineTo(t.x, t.y)); ctx.stroke();
+      ctx.beginPath(); tp0.forEach((t, i) => i === 0 ? ctx.moveTo(t.x, t.y) : ctx.lineTo(t.x, t.y)); ctx.stroke();
       // Center dashes
       ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 2; ctx.setLineDash([10, 12]);
-      ctx.beginPath(); track.forEach((t, i) => i === 0 ? ctx.moveTo(t.x, t.y) : ctx.lineTo(t.x, t.y)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); tp0.forEach((t, i) => i === 0 ? ctx.moveTo(t.x, t.y) : ctx.lineTo(t.x, t.y)); ctx.stroke(); ctx.setLineDash([]);
 
       // ── Tiles ─────────────────────────────────────────────────────────────
       track.forEach((t, i) => {
