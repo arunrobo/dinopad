@@ -38,7 +38,7 @@ export default function App() {
   })();
 
   return (
-    <>
+    <div style={state.settings.highContrast ? { filter: 'contrast(1.25) saturate(1.2)', width: '100%', height: '100%' } : undefined}>
       {scene}
       {isPortrait && (
         <div style={{
@@ -59,6 +59,6 @@ export default function App() {
           <div style={{ fontSize: '3rem', marginTop: 8 }}>🦕📱🦖</div>
         </div>
       )}
-    </>
+    </div>
   );
 }

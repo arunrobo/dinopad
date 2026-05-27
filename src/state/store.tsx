@@ -21,7 +21,7 @@ export interface Settings {
   showDebugRegions: boolean;
   turnDirection: 'clockwise' | 'counter-clockwise';
   turnTimer: number; // 0 = off, else seconds per turn
-  boardTheme: 'jungle' | 'volcano' | 'iceage';
+  boardTheme: 'jungle' | 'desert' | 'iceage';
 }
 
 export interface PlayerResult {
@@ -122,6 +122,7 @@ function loadState(): Partial<AppState> {
     if (!raw) return {};
     const data = JSON.parse(raw);
     if (data.version === 1) data.settings = { ...defaultSettings, ...data.settings, turnTimer: 0 };
+    if (data.settings?.boardTheme === 'volcano') data.settings.boardTheme = 'desert';
     if (data.version < STORAGE_VERSION) data.version = STORAGE_VERSION;
     return {
       playerProfiles: data.playerProfiles || [],

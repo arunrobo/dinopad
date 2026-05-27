@@ -15,22 +15,22 @@ interface ThemePalette {
 }
 const THEMES: Record<string, ThemePalette> = {
   jungle: {
-    bg: '#2d5a27', tileA: '#3d7a37', tileB: '#4a8f42', border: 'rgba(0,0,0,0.2)',
-    ladderCol: 'rgba(76,175,80,0.7)', slideCol: 'rgba(139,69,19,0.7)', startCol: '#FFD700',
-    ladderEmoji: '🦶', slideEmoji: '💦', slideVerb: 'Slid in mud', slideThing: '💦',
-    tileGlow: 'rgba(76,175,80,0.12)',
+    bg: '#1a3a12', tileA: '#2d5a22', tileB: '#3a7030', border: 'rgba(0,0,0,0.25)',
+    ladderCol: 'rgba(100,200,80,0.75)', slideCol: 'rgba(100,160,60,0.7)', startCol: '#FFD700',
+    ladderEmoji: '🌿', slideEmoji: '💦', slideVerb: 'Slid in mud', slideThing: '💧',
+    tileGlow: 'rgba(76,200,60,0.16)',
   },
-  volcano: {
-    bg: '#3a1508', tileA: '#5a2a12', tileB: '#6a351a', border: 'rgba(255,80,0,0.15)',
-    ladderCol: 'rgba(255,180,50,0.7)', slideCol: 'rgba(255,60,30,0.7)', startCol: '#FF9800',
-    ladderEmoji: '🔥', slideEmoji: '🌋', slideVerb: 'Lava slip', slideThing: '🌋',
-    tileGlow: 'rgba(255,100,20,0.10)',
+  desert: {
+    bg: '#7a4808', tileA: '#a06218', tileB: '#c07e2a', border: 'rgba(200,140,20,0.2)',
+    ladderCol: 'rgba(255,210,80,0.75)', slideCol: 'rgba(230,140,40,0.75)', startCol: '#FFD700',
+    ladderEmoji: '🌵', slideEmoji: '🪨', slideVerb: 'Sandstorm slide', slideThing: '🏜️',
+    tileGlow: 'rgba(255,200,50,0.16)',
   },
   iceage: {
-    bg: '#1a2a3a', tileA: '#2a4a6a', tileB: '#3a5a7a', border: 'rgba(150,220,255,0.15)',
-    ladderCol: 'rgba(100,200,255,0.7)', slideCol: 'rgba(180,220,255,0.7)', startCol: '#80DEEA',
-    ladderEmoji: '❄️', slideEmoji: '🧊', slideVerb: 'Ice slide', slideThing: '🧊',
-    tileGlow: 'rgba(100,200,255,0.10)',
+    bg: '#0d2040', tileA: '#1e4070', tileB: '#2a5490', border: 'rgba(150,220,255,0.18)',
+    ladderCol: 'rgba(120,210,255,0.75)', slideCol: 'rgba(180,230,255,0.75)', startCol: '#80DEEA',
+    ladderEmoji: '❄️', slideEmoji: '🧊', slideVerb: 'Ice slide', slideThing: '🌨️',
+    tileGlow: 'rgba(120,210,255,0.14)',
   },
 };
 
@@ -65,6 +65,9 @@ export function createGame1(): GameInstance {
   let diceValue = 0;
   let diceAnimTimer = 0;
   let diceDisplay = 1;
+  let diceSettleTimer = 0;
+  type FloatNum = { x: number; y: number; text: string; color: string; life: number; maxLife: number };
+  let floatNums: FloatNum[] = [];
   let moveStepsLeft = 0;
   let moveTimer = 0;
   let currentMovingId = '';
@@ -78,6 +81,7 @@ export function createGame1(): GameInstance {
   let boardX = 0;
   let boardY = 0;
   let theme: ThemePalette = THEMES.jungle;
+  let boardThemeName = 'jungle';
   let globalTime = 0;
 
   // Footprint trails (persistent decoration along ladder paths)
@@ -187,17 +191,20 @@ export function createGame1(): GameInstance {
       gridSize = cfg.kidMode ? 5 : 7;
       totalTiles = gridSize * gridSize;
       theme = THEMES[cfg.boardTheme] || THEMES.jungle;
+      boardThemeName = cfg.boardTheme;
       turn = createTurnState(players.map(p => p.side), cfg.turnDirection);
       buildBoard(w, h);
       positions = new Map(); usedRoar = new Set();
       players.forEach(p => { positions.set(p.id, 0); stats.set(p.id, { ladders: 0, slides: 0, rolls: 0 }); });
       phase = 'waitTap'; turnMessage = 'TAP to roll!'; winner = null; globalTime = 0;
-      slideAnim = null; climbAnim = null;
+      slideAnim = null; climbAnim = null; floatNums = [];
     },
 
     update(dt, inputs) {
       globalTime += dt;
       particles = updateParticles(particles, dt);
+      if (diceSettleTimer > 0) diceSettleTimer = Math.max(0, diceSettleTimer - dt);
+      floatNums = floatNums.filter(fn => { fn.life -= dt; return fn.life > 0; });
       if (winner) { finishDelay -= dt; return; }
       const side = getCurrentSide(turn);
       const input = inputs.get(side);
@@ -244,7 +251,7 @@ export function createGame1(): GameInstance {
 
       switch (phase) {
         case 'waitTap':
-          if (input?.justPressed) { phase = 'rolling'; diceAnimTimer = 0.6; diceValue = 0; audioManager.play('tap'); }
+          if (input?.justPressed) { phase = 'rolling'; diceAnimTimer = 1.5; diceValue = 0; audioManager.play('tap'); }
           break;
         case 'rolling':
           diceAnimTimer -= dt; diceDisplay = randInt(1, 6);
@@ -254,7 +261,8 @@ export function createGame1(): GameInstance {
               usedRoar.add(cp.id); diceValue = randInt(1, 6); diceDisplay = diceValue;
               audioManager.play('burst'); turnMessage = `DINO ROAR! → ${diceValue}!`;
             } else { audioManager.play('powerup'); turnMessage = `Rolled ${diceValue}!`; }
-            currentMovingId = cp.id; moveStepsLeft = diceValue; moveTimer = 0; phase = 'moving';
+            currentMovingId = cp.id; moveStepsLeft = diceValue; moveTimer = 0; phase = 'moving'; diceSettleTimer = 0.5;
+            floatNums.push({ x: boardX + gridSize * tileSize + 40, y: lastH / 2, text: `${diceValue}`, color: cp.color, life: 1.1, maxLife: 1.1 });
           }
           break;
         case 'moving':
@@ -262,7 +270,7 @@ export function createGame1(): GameInstance {
           if (moveTimer <= 0 && moveStepsLeft > 0) {
             const cur = positions.get(currentMovingId) || 0;
             const np = Math.min(cur + 1, totalTiles - 1);
-            positions.set(currentMovingId, np); moveStepsLeft--; moveTimer = 0.2; audioManager.play('tap');
+            positions.set(currentMovingId, np); moveStepsLeft--; moveTimer = 0.38; audioManager.play('tap');
             if (np >= totalTiles - 1) moveStepsLeft = 0;
           }
           if (moveStepsLeft <= 0 && moveTimer <= 0) phase = 'landEffect';
@@ -285,12 +293,12 @@ export function createGame1(): GameInstance {
             if (tile.type === 'ladder') {
               positions.set(currentMovingId, tile.link); addStat(cp.id, 'ladders', 1);
               audioManager.play('rescue'); turnMessage = `Climbed a trail! ${theme.ladderEmoji}`;
-              climbAnim = { playerId: currentMovingId, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, dur: 0.6 };
+              climbAnim = { playerId: currentMovingId, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, dur: 1.4 };
               phase = 'climbAnim';
             } else {
               positions.set(currentMovingId, tile.link); addStat(cp.id, 'slides', 1);
               audioManager.play('oops'); turnMessage = `${theme.slideVerb}! ${theme.slideThing}`;
-              slideAnim = { playerId: currentMovingId, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, dur: 0.5 };
+              slideAnim = { playerId: currentMovingId, fromX: from.x, fromY: from.y, toX: to.x, toY: to.y, t: 0, dur: 1.0 };
               phase = 'slideAnim';
             }
           } else {
@@ -305,8 +313,22 @@ export function createGame1(): GameInstance {
     render(ctx, w, h) {
       // Adapt board layout if canvas size changed
       if (w !== lastW || h !== lastH) { lastW = w; lastH = h; layoutBoard(w, h); }
-      // Background
-      ctx.fillStyle = theme.bg; ctx.fillRect(0, 0, w, h);
+      // Background with gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+      bgGrad.addColorStop(0, theme.bg);
+      bgGrad.addColorStop(1, theme.bg + 'cc');
+      ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, w, h);
+
+      // Theme background decorations
+      const decos = boardThemeName === 'jungle' ? ['🌿','🌴','🌱','🍃'] : boardThemeName === 'desert' ? ['🌵','🏜️','🪨','🌵'] : ['❄️','🏔️','🌨️','⛄'];
+      ctx.font = `${Math.min(tileSize * 0.55, 28)}px sans-serif`;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+      const decoOffsets = [{ x: 0.02, y: 0.15 }, { x: 0.04, y: 0.7 }, { x: 0.96, y: 0.2 }, { x: 0.94, y: 0.75 }];
+      decoOffsets.forEach((d, i) => {
+        ctx.globalAlpha = 0.28 + 0.1 * Math.sin(globalTime * 0.7 + i * 1.2);
+        ctx.fillText(decos[i % decos.length], w * d.x, h * d.y);
+      });
+      ctx.globalAlpha = 1;
 
       // Board tiles
       for (let i = 0; i < totalTiles; i++) {
@@ -328,8 +350,8 @@ export function createGame1(): GameInstance {
           ctx.font = `${tileSize * 0.32}px sans-serif`;
           ctx.fillText(t.type === 'ladder' ? theme.ladderEmoji : theme.slideEmoji, t.x, t.y - tileSize * 0.05);
         }
-        if (i === 0) { ctx.fillStyle = theme.startCol; ctx.font = `bold ${tileSize * 0.2}px sans-serif`; ctx.fillText('START', t.x, t.y); }
-        if (i === totalTiles - 1) { ctx.fillStyle = theme.startCol; ctx.font = `bold ${tileSize * 0.2}px sans-serif`; ctx.fillText('FINISH', t.x, t.y); }
+        if (i === 0) { ctx.fillStyle = theme.startCol; ctx.font = `bold ${tileSize * 0.2}px 'Fredoka One', cursive`; ctx.fillText('START', t.x, t.y); }
+        if (i === totalTiles - 1) { ctx.fillStyle = theme.startCol; ctx.font = `bold ${tileSize * 0.2}px 'Fredoka One', cursive`; ctx.fillText('FINISH', t.x, t.y); }
       }
 
       // Animated footprint trails along ladders
@@ -415,54 +437,90 @@ export function createGame1(): GameInstance {
         ctx.restore();
       });
 
-      // Dice — clean 3D (placed to the right of the board)
-      const dx = boardX + gridSize * tileSize + 40, dy = h / 2, ds = 50;
+      // ── Enhanced Dice ─────────────────────────────────────────────────────
+      const dx = boardX + gridSize * tileSize + 40, dy = h / 2, ds = 52;
       const isRolling = phase === 'rolling';
-      const wobble = isRolling ? Math.sin(globalTime * 20) * 0.12 : 0;
+      const rollProgress = isRolling ? Math.max(0, 1 - diceAnimTimer / 1.5) : 1;
+      const settleProgress = diceSettleTimer > 0 ? (0.5 - diceSettleTimer) / 0.5 : 1;
+      const bounceScale = diceSettleTimer > 0 ? 1 + 0.22 * Math.sin(Math.PI * settleProgress) : 1;
+
+      // Face-flip spin (simulate tumbling in 3D)
+      const flipSpeed = isRolling ? 14 + (1 - rollProgress) * 10 : 0;
+      const flipAmp = isRolling ? (1 - rollProgress * 0.65) : 0;
+      const squishX = isRolling ? (Math.abs(Math.cos(globalTime * flipSpeed)) * flipAmp + (1 - flipAmp)) : 1;
+      const diceRotation = isRolling ? Math.sin(globalTime * flipSpeed * 0.7) * 0.3 * flipAmp : 0;
 
       ctx.save();
       ctx.translate(dx, dy);
-      if (isRolling) ctx.rotate(wobble);
+      ctx.scale(bounceScale, bounceScale);
 
-      // Drop shadow
-      ctx.shadowColor = 'rgba(0,0,0,0.4)';
-      ctx.shadowBlur = 10;
-      ctx.shadowOffsetX = 3;
-      ctx.shadowOffsetY = 4;
+      // Motion trail — only during early rolling phase
+      if (isRolling && rollProgress < 0.55) {
+        const trailFade = (0.55 - rollProgress) / 0.55;
+        for (let ti = 1; ti <= 2; ti++) {
+          const ang = globalTime * flipSpeed * 0.65 - ti * 0.5;
+          ctx.save();
+          ctx.globalAlpha = trailFade * 0.18 / ti;
+          ctx.translate(Math.cos(ang) * 9 * ti, Math.sin(ang * 0.55) * 5 * ti);
+          ctx.scale(squishX * 0.85, 0.88);
+          ctx.fillStyle = '#d0d0d0';
+          ctx.beginPath(); ctx.roundRect(-ds / 2, -ds / 2, ds, ds, 7); ctx.fill();
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+      }
 
-      // Main face — white with soft top-left highlight
+      // Apply flip + rotation
+      ctx.scale(squishX, 1);
+      ctx.rotate(diceRotation);
+
+      // Glow
+      if (isRolling) {
+        const glowCol = rollProgress > 0.65 ? '#FFD700' : '#80B0FF';
+        ctx.shadowColor = glowCol; ctx.shadowBlur = 18 + 7 * Math.sin(globalTime * 10);
+        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+      } else if (diceSettleTimer > 0) {
+        const ga = diceSettleTimer / 0.5;
+        ctx.shadowColor = `rgba(255,215,0,${ga})`; ctx.shadowBlur = 22 * ga;
+        ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+      } else {
+        ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4;
+      }
+
+      // Main face gradient
       const faceGrad = ctx.createRadialGradient(-ds * 0.2, -ds * 0.2, 0, 0, 0, ds * 0.8);
-      faceGrad.addColorStop(0, '#ffffff');
-      faceGrad.addColorStop(1, '#dcdcdc');
+      if (isRolling && rollProgress > 0.65) {
+        faceGrad.addColorStop(0, '#fff8e1'); faceGrad.addColorStop(1, '#ffe082');
+      } else {
+        faceGrad.addColorStop(0, '#ffffff'); faceGrad.addColorStop(1, '#dcdcdc');
+      }
       ctx.fillStyle = faceGrad;
       ctx.beginPath(); ctx.roundRect(-ds / 2, -ds / 2, ds, ds, 7); ctx.fill();
 
-      // Reset shadow before stroke/pips
       ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
 
-      // Border
-      ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1.5;
+      // Border — golden when settling or final phase of roll
+      const borderGolden = diceSettleTimer > 0 || (isRolling && rollProgress > 0.7);
+      ctx.strokeStyle = borderGolden
+        ? `rgba(255,215,0,${diceSettleTimer > 0 ? Math.min(1, diceSettleTimer * 2.5) : 0.75})`
+        : '#aaa';
+      ctx.lineWidth = borderGolden ? 2.5 : 1.5;
       ctx.beginPath(); ctx.roundRect(-ds / 2, -ds / 2, ds, ds, 7); ctx.stroke();
 
-      // Inner bevel highlight (top-left edge)
+      // Inner bevel highlight
       ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.roundRect(-ds / 2 + 2, -ds / 2 + 2, ds - 4, ds - 4, 5); ctx.stroke();
 
-      // Draw pips
-      if (phase === 'rolling' || diceValue > 0) {
-        const v = diceDisplay;
-        const pr = ds * 0.075;
-        const poff = ds * 0.26;
-
+      // Pips
+      if (isRolling || diceValue > 0) {
+        const v = diceDisplay, pr = ds * 0.115, poff = ds * 0.26;
         const drawPip = (px: number, py: number) => {
-          // Recessed pip
           ctx.fillStyle = '#1a1a1a';
           ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
-          // Tiny highlight on pip
           ctx.fillStyle = 'rgba(255,255,255,0.25)';
           ctx.beginPath(); ctx.arc(px - pr * 0.3, py - pr * 0.3, pr * 0.35, 0, Math.PI * 2); ctx.fill();
         };
-
         if (v === 1 || v === 3 || v === 5) drawPip(0, 0);
         if (v >= 2) { drawPip(-poff, -poff); drawPip(poff, poff); }
         if (v >= 4) { drawPip(poff, -poff); drawPip(-poff, poff); }
@@ -470,6 +528,25 @@ export function createGame1(): GameInstance {
       }
 
       ctx.restore();
+
+      // Floating number burst from dice
+      for (const fn of floatNums) {
+        const p = 1 - fn.life / fn.maxLife;
+        const yOff = p < 0.25 ? 0 : -(((p - 0.25) / 0.75) ** 0.7) * 68;
+        const scale = p < 0.25 ? (p / 0.25) * 2.2 : 2.2 - ((p - 0.25) / 0.75) * 0.7;
+        const alpha = p < 0.25 ? 1 : 1 - (p - 0.25) / 0.75;
+        const fSize = Math.round(30 * Math.max(scale, 0.1));
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.font = `bold ${fSize}px 'Fredoka One', cursive`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.lineWidth = Math.max(3, fSize * 0.12);
+        ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+        ctx.strokeText(fn.text, fn.x, fn.y + yOff);
+        ctx.fillStyle = fn.color;
+        ctx.fillText(fn.text, fn.x, fn.y + yOff);
+        ctx.restore();
+      }
 
       renderParticles(ctx, particles);
     },

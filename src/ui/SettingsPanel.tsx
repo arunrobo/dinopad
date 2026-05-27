@@ -36,7 +36,7 @@ export default function SettingsPanel() {
       </Row>
       <Row label="Board Theme">
         <div style={{ display: 'flex', gap: '6px' }}>
-          {([['jungle', '🌿'], ['volcano', '🌋'], ['iceage', '🧊']] as const).map(([t, icon]) => (
+          {([['jungle', '🌿'], ['desert', '🏜️'], ['iceage', '🧊']] as const).map(([t, icon]) => (
             <button key={t} onClick={() => dispatch({ type: 'UPDATE_SETTINGS', settings: { boardTheme: t } })}
               style={{
                 padding: '6px 10px', borderRadius: '8px',
@@ -47,6 +47,11 @@ export default function SettingsPanel() {
           ))}
         </div>
       </Row>
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: '10px', marginTop: '4px' }}>
+        <p style={{ fontSize: '0.75rem', color: 'rgba(255,200,100,0.8)', marginBottom: '8px' }}>
+          ℹ️ Kid Mode, Board Theme &amp; Turn Direction apply when starting a new game.
+        </p>
+      </div>
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '12px' }}>
         <p style={{ fontSize: '0.85rem', marginBottom: '8px', color: 'rgba(255,255,255,0.7)' }}>Test Sounds:</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>

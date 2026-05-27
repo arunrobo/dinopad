@@ -16,7 +16,7 @@ export interface GameConfig {
   kidMode: boolean;
   turnDirection: 'clockwise' | 'counter-clockwise';
   turnTimer: number;
-  boardTheme: 'jungle' | 'volcano' | 'iceage';
+  boardTheme: 'jungle' | 'desert' | 'iceage';
 }
 
 export interface ButtonInput {
