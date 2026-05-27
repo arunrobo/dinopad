@@ -47,6 +47,21 @@ export default function SettingsPanel() {
           ))}
         </div>
       </Row>
+      <Row label="Difficulty">
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {([['low', '🌱 Low'], ['medium', '🔥 Medium']] as const).map(([c, label]) => (
+            <button key={c} onClick={() => dispatch({ type: 'UPDATE_SETTINGS', settings: { complexity: c } })}
+              style={{
+                padding: '6px 12px', borderRadius: '8px',
+                border: s.complexity === c ? `2px solid ${c === 'low' ? '#4CAF50' : '#FF8C00'}` : '2px solid transparent',
+                background: s.complexity === c
+                  ? (c === 'low' ? 'rgba(76,175,80,0.25)' : 'rgba(255,140,0,0.25)')
+                  : 'rgba(255,255,255,0.15)',
+                color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold',
+              }}>{label}</button>
+          ))}
+        </div>
+      </Row>
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: '10px', marginTop: '4px' }}>
         <p style={{ fontSize: '0.75rem', color: 'rgba(255,200,100,0.8)', marginBottom: '8px' }}>
           ℹ️ Kid Mode, Board Theme &amp; Turn Direction apply when starting a new game.

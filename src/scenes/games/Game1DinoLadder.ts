@@ -188,7 +188,7 @@ export function createGame1(): GameInstance {
   return {
     init(cfg: GameConfig, w: number, h: number) {
       players = cfg.players;
-      gridSize = cfg.kidMode ? 5 : 7;
+      gridSize = cfg.complexity === 'medium' ? 7 : (cfg.kidMode ? 5 : 7);
       totalTiles = gridSize * gridSize;
       theme = THEMES[cfg.boardTheme] || THEMES.jungle;
       boardThemeName = cfg.boardTheme;

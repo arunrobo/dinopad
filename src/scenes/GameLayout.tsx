@@ -64,6 +64,7 @@ export default function GameLayout() {
       turnDirection: settings.turnDirection,
       turnTimer: settings.turnTimer,
       boardTheme: settings.boardTheme,
+      complexity: settings.complexity ?? 'low',
     };
     game.init(cfg, rect.width, rect.height);
     audioManager.startMusic();

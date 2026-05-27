@@ -6,7 +6,7 @@ import { createTurnState, getCurrentSide, advanceTurn, type TurnState } from '..
 import { drawDinoOnCanvas } from '../../engine/assets';
 import { audioManager } from '../../engine/audioManager';
 
-const TRACK_LEN = 30;
+let trackLen = 30;
 interface TrackTile { x: number; y: number; type: 'normal' | 'eggBonus' | 'pteraLift' | 'lavaRock'; }
 type Phase = 'waitTap' | 'rolling' | 'moving' | 'event' | 'skipTurn' | 'finished';
 
@@ -54,6 +54,7 @@ export function createGame3(): GameInstance {
   let globalTime = 0;
   let skipped = new Set<string>();
   let kidMode = false;
+  let complexity: 'low' | 'medium' = 'low';
   let isRisky = false;
   let eventTimer = 0;
   let boardTheme = 'jungle';
@@ -68,26 +69,29 @@ export function createGame3(): GameInstance {
     const uw = w - m * 2, uh = h - m * 2;
     const oldTypes = track.map(t => t.type);
     track = [];
-    for (let i = 0; i < TRACK_LEN; i++) {
-      const t = i / (TRACK_LEN - 1);
+    const isMedium = complexity === 'medium';
+    for (let i = 0; i < trackLen; i++) {
+      const t = i / (trackLen - 1);
       let type: TrackTile['type'] = 'normal';
       if (oldTypes[i]) { type = oldTypes[i]; }
-      else if (i > 2 && i < TRACK_LEN - 2) {
+      else if (i > 2 && i < trackLen - 2) {
         const r = Math.random();
-        if (r < 0.1) type = 'eggBonus';
-        else if (r < 0.18) type = 'pteraLift';
-        else if (r < 0.28) type = 'lavaRock';
+        if (r < 0.10) type = 'eggBonus';
+        else if (r < (isMedium ? 0.17 : 0.18)) type = 'pteraLift';
+        else if (r < (isMedium ? 0.38 : 0.28)) type = 'lavaRock';
       }
       track.push({ x: m + t * uw, y: h / 2 + Math.sin(t * Math.PI * 3) * uh * 0.25, type });
     }
   }
 
-  function getTP(idx: number) { return track[Math.max(0, Math.min(TRACK_LEN - 1, idx))]; }
+  function getTP(idx: number) { return track[Math.max(0, Math.min(trackLen - 1, idx))]; }
   function addStat(pid: string, k: string, v: number) { const s = stats.get(pid) || {}; s[k] = (s[k] || 0) + v; stats.set(pid, s); }
 
   return {
     init(cfg, w, h) {
       players = cfg.players; kidMode = cfg.kidMode; boardTheme = cfg.boardTheme;
+      complexity = cfg.complexity ?? 'low';
+      trackLen = complexity === 'medium' ? 45 : 30;
       turn = createTurnState(players.map(p => p.side), cfg.turnDirection);
       track = []; // force full rebuild with fresh random types
       buildTrack(w, h); positions = new Map(); skipped = new Set();
@@ -139,15 +143,15 @@ export function createGame3(): GameInstance {
         case 'moving':
           moveTimer -= dt;
           if (moveTimer <= 0 && moveStepsLeft > 0) {
-            const pos = Math.min((positions.get(currentMovingId) || 0) + 1, TRACK_LEN - 1);
+            const pos = Math.min((positions.get(currentMovingId) || 0) + 1, trackLen - 1);
             positions.set(currentMovingId, pos); moveStepsLeft--; moveTimer = 0.22; audioManager.play('step');
-            if (pos >= TRACK_LEN - 1) moveStepsLeft = 0;
+            if (pos >= trackLen - 1) moveStepsLeft = 0;
           }
           if (moveStepsLeft <= 0 && moveTimer <= 0) { phase = 'event'; eventTimer = 0; }
           break;
         case 'event': {
           const pos = positions.get(currentMovingId) || 0;
-          if (pos >= TRACK_LEN - 1) {
+          if (pos >= trackLen - 1) {
             winner = currentMovingId; cp.score = 100; audioManager.play('win');
             const wp = getTP(pos); for (let i = 0; i < 20; i++) particles.push(createParticle(wp.x, wp.y, cp.color));
             turnMessage = `${cp.name} WINS! 🏆`; phase = 'finished'; finishDelay = 2; break;
@@ -156,22 +160,32 @@ export function createGame3(): GameInstance {
           if (tile) {
             switch (tile.type) {
               case 'eggBonus': {
-                const b = randInt(2, 3); positions.set(currentMovingId, Math.min(pos + b, TRACK_LEN - 1));
+                const b = randInt(2, 3); positions.set(currentMovingId, Math.min(pos + b, trackLen - 1));
                 addStat(cp.id, 'bonuses', 1); audioManager.play('milestone'); turnMessage = `Egg bonus! +${b}! 🥚`;
                 for (let i = 0; i < 8; i++) particles.push(createParticle(tp.x, tp.y, '#FFD700')); tile.type = 'normal'; break;
               }
               case 'pteraLift': {
-                const l = randInt(3, 5); positions.set(currentMovingId, Math.min(pos + l, TRACK_LEN - 1));
+                const l = randInt(3, 5); positions.set(currentMovingId, Math.min(pos + l, trackLen - 1));
                 addStat(cp.id, 'bonuses', 1); audioManager.play('milestone'); turnMessage = `Pterodactyl lift! +${l}! 🐉`;
                 for (let i = 0; i < 10; i++) particles.push(createParticle(tp.x, tp.y, '#26C6DA')); tile.type = 'normal'; break;
               }
-              case 'lavaRock':
-                if (!kidMode) {
+              case 'lavaRock': {
+                if (complexity === 'medium') {
+                  // Medium: bigger penalty, tile stays active for future hits
+                  const pen = randInt(2, 3); positions.set(currentMovingId, Math.max(0, pos - pen));
+                  audioManager.play('descend'); turnMessage = `🌋 VOLCANO! -${pen}! 💥`;
+                  for (let i = 0; i < 14; i++) particles.push(createParticle(tp.x, tp.y, '#FF5722'));
+                  for (let i = 0; i < 6; i++) particles.push(createParticle(tp.x, tp.y, '#FF9800'));
+                } else if (!kidMode) {
                   const pen = randInt(1, 2); positions.set(currentMovingId, Math.max(0, pos - pen));
                   audioManager.play('oops'); turnMessage = `Obstacle! -${pen}! ⚠️`;
                   for (let i = 0; i < 10; i++) particles.push(createParticle(tp.x, tp.y, '#FF4444'));
+                  tile.type = 'normal';
+                } else {
+                  tile.type = 'normal';
                 }
-                tile.type = 'normal'; break;
+                break;
+              }
             }
           }
           turn = advanceTurn(turn); phase = 'waitTap';
@@ -225,7 +239,7 @@ export function createGame3(): GameInstance {
       // ── Tiles ─────────────────────────────────────────────────────────────
       track.forEach((t, i) => {
         const isSpecial = t.type !== 'normal';
-        const isMile = i % 5 === 0 && i > 0 && i < TRACK_LEN - 1;
+        const isMile = i % 5 === 0 && i > 0 && i < trackLen - 1;
         const r = isSpecial ? 17 : isMile ? 15 : 11;
         if (isSpecial) {
           const gc = t.type === 'eggBonus' ? '#FFD700' : t.type === 'pteraLift' ? '#26C6DA' : '#FF5722';
@@ -239,7 +253,7 @@ export function createGame3(): GameInstance {
         ctx.strokeStyle = isSpecial ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.22)';
         ctx.lineWidth = isSpecial ? 2 : 1; ctx.stroke();
         ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
-        if (!isSpecial && i > 0 && i < TRACK_LEN - 1) {
+        if (!isSpecial && i > 0 && i < trackLen - 1) {
           ctx.fillStyle = isMile ? 'rgba(255,215,0,0.9)' : 'rgba(255,255,255,0.5)';
           ctx.font = `bold ${isMile ? 9 : 7}px sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -260,7 +274,7 @@ export function createGame3(): GameInstance {
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('START', t.x, t.y);
         }
         // FINISH marker
-        if (i === TRACK_LEN - 1) {
+        if (i === trackLen - 1) {
           const pulse = 1 + 0.08 * Math.sin(globalTime * 4.5);
           ctx.shadowColor = th.finishGlow; ctx.shadowBlur = 20;
           ctx.fillStyle = th.finishGlow;
@@ -308,8 +322,8 @@ export function createGame3(): GameInstance {
       ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.stroke();
       ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(pbX1, pbY + 3); ctx.lineTo(pbX2, pbY + 3); ctx.stroke();
-      for (let mi = 0; mi < TRACK_LEN; mi += 5) {
-        const mx = pbX1 + (pbX2 - pbX1) * (mi / (TRACK_LEN - 1));
+      for (let mi = 0; mi < trackLen; mi += 5) {
+        const mx = pbX1 + (pbX2 - pbX1) * (mi / (trackLen - 1));
         ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(mx, pbY - 1); ctx.lineTo(mx, pbY + 7); ctx.stroke();
       }
@@ -318,7 +332,7 @@ export function createGame3(): GameInstance {
       ctx.fillText('GO', pbX1 - 9, pbY + 3); ctx.fillText('🏆', pbX2 + 11, pbY + 3);
       players.forEach((p, i) => {
         const pos = positions.get(p.id) || 0;
-        const pct = pos / (TRACK_LEN - 1);
+        const pct = pos / (trackLen - 1);
         const px = pbX1 + (pbX2 - pbX1) * pct + (i - (players.length - 1) / 2) * 5;
         ctx.fillStyle = p.color;
         ctx.beginPath(); ctx.arc(px, pbY + 3, 6, 0, Math.PI * 2); ctx.fill();

@@ -30,6 +30,7 @@ export function createGame2(): GameInstance {
   let fastMode = false;
   let lastW = 0, lastH = 0, lastKidMode = false;
   let boardTheme = 'jungle';
+  let complexity: 'low' | 'medium' = 'low';
   let matchPulseTimer = 0;
   let lastMatchedPair: number[] = [];
   type RingBurst = { x: number; y: number; targetR: number; life: number; maxLife: number; color: string };
@@ -37,14 +38,15 @@ export function createGame2(): GameInstance {
   let globalTime = 0;
 
   function buildCards(w: number, h: number, kid: boolean) {
-    const pairs = kid ? 6 : 8;
+    const isMedium = complexity === 'medium';
+    const pairs = isMedium ? 10 : (kid ? 6 : 8);
     totalPairs = pairs;
     const icons = FOSSILS.slice(0, pairs);
     const data = shuffle([...icons, ...icons]);
-    const cols = 4;
-    const rows = kid ? 3 : 4;
-    const gap = 8;
-    const m = Math.min(w, h) * 0.07;
+    const cols = isMedium ? 5 : 4;
+    const rows = isMedium ? 4 : (kid ? 3 : 4);
+    const gap = isMedium ? 6 : 8;
+    const m = Math.min(w, h) * (isMedium ? 0.05 : 0.07);
     const gw = w - m * 2, gh = h - m * 2;
     const cs = Math.floor(Math.min(gw / cols - gap, gh / rows - gap));
     const totalGridW = cols * cs + (cols - 1) * gap;
@@ -72,6 +74,7 @@ export function createGame2(): GameInstance {
     init(cfg, w, h) {
       players = cfg.players;
       boardTheme = cfg.boardTheme;
+      complexity = cfg.complexity ?? 'low';
       turn = createTurnState(players.map(p => p.side), cfg.turnDirection);
       buildCards(w, h, cfg.kidMode);
       cursorSpeed = cfg.kidMode ? 1.0 : 0.7;

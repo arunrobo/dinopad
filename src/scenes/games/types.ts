@@ -17,6 +17,7 @@ export interface GameConfig {
   turnDirection: 'clockwise' | 'counter-clockwise';
   turnTimer: number;
   boardTheme: 'jungle' | 'desert' | 'iceage';
+  complexity: 'low' | 'medium';
 }
 
 export interface ButtonInput {

@@ -22,6 +22,7 @@ export interface Settings {
   turnDirection: 'clockwise' | 'counter-clockwise';
   turnTimer: number; // 0 = off, else seconds per turn
   boardTheme: 'jungle' | 'desert' | 'iceage';
+  complexity: 'low' | 'medium';
 }
 
 export interface PlayerResult {
@@ -63,6 +64,7 @@ const defaultSettings: Settings = {
   turnDirection: 'clockwise',
   turnTimer: 0,
   boardTheme: 'jungle',
+  complexity: 'low',
 };
 
 export function createDefaultProfile(index: number, color: string): PlayerProfile {
