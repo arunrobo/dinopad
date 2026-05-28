@@ -1,6 +1,7 @@
-import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useState, type ReactNode } from 'react';
 import type { Side } from '../engine/utils';
 import { generateId } from '../engine/utils';
+import { dbGet, dbSet } from '../engine/db';
 
 /* ── Types ── */
 export type Scene = 'launch' | 'profiles' | 'setup' | 'selectGame' | 'tutorial' | 'game' | 'results';
@@ -88,7 +89,8 @@ type Action =
   | { type: 'UPDATE_PROFILE'; id: string; updates: Partial<PlayerProfile> }
   | { type: 'DELETE_PROFILE'; id: string }
   | { type: 'UPDATE_SETTINGS'; settings: Partial<Settings> }
-  | { type: 'SET_RESULTS'; results: GameResultsData };
+  | { type: 'SET_RESULTS'; results: GameResultsData }
+  | { type: 'HYDRATE'; payload: Partial<AppState> };
 
 /* ── Reducer ── */
 function reducer(state: AppState, action: Action): AppState {
@@ -110,45 +112,67 @@ function reducer(state: AppState, action: Action): AppState {
     case 'UPDATE_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.settings } };
     case 'SET_RESULTS': return { ...state, gameResults: action.results, scene: 'results' };
+    case 'HYDRATE':     return { ...state, ...action.payload };
     default: return state;
   }
 }
 
-/* ── Storage ── */
-const STORAGE_KEY = 'dino-party-pad';
+/* ── Storage (IndexedDB) ── */
+const STORAGE_KEY     = 'dino-party-pad';
 const STORAGE_VERSION = 2;
 
-function loadState(): Partial<AppState> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const data = JSON.parse(raw);
-    if (data.version === 1) data.settings = { ...defaultSettings, ...data.settings, turnTimer: 0 };
-    if (data.settings?.boardTheme === 'volcano') data.settings.boardTheme = 'desert';
-    if (data.version < STORAGE_VERSION) data.version = STORAGE_VERSION;
-    return {
-      playerProfiles: data.playerProfiles || [],
-      settings: { ...defaultSettings, ...data.settings },
-      numberOfPlayers: data.numberOfPlayers || 2,
-      selectedPlayerIds: data.selectedPlayerIds || [],
-    };
-  } catch { return {}; }
+type StoredData = {
+  version: number;
+  playerProfiles: PlayerProfile[];
+  settings: Settings;
+  numberOfPlayers: number;
+  selectedPlayerIds: string[];
+};
+
+function parseStoredData(data: StoredData): Partial<AppState> {
+  if (data.version === 1)                                    data.settings = { ...defaultSettings, ...data.settings, turnTimer: 0 };
+  if ((data.settings?.boardTheme as string) === 'volcano')   data.settings.boardTheme = 'desert';
+  if (data.version < STORAGE_VERSION)            data.version = STORAGE_VERSION;
+  return {
+    playerProfiles:    data.playerProfiles    || [],
+    settings:          { ...defaultSettings, ...data.settings },
+    numberOfPlayers:   data.numberOfPlayers   || 2,
+    selectedPlayerIds: data.selectedPlayerIds || [],
+  };
 }
 
-function saveState(state: AppState) {
+async function loadFromIDB(): Promise<Partial<AppState>> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      version: STORAGE_VERSION,
-      playerProfiles: state.playerProfiles,
-      settings: state.settings,
-      numberOfPlayers: state.numberOfPlayers,
+    // Try IDB first
+    const idbData = await dbGet<StoredData>(STORAGE_KEY);
+    if (idbData) return parseStoredData(idbData);
+
+    // One-time migration: pull any existing localStorage data into IDB
+    const legacy = localStorage.getItem(STORAGE_KEY);
+    if (legacy) {
+      const parsed: StoredData = JSON.parse(legacy);
+      await dbSet(STORAGE_KEY, parsed);
+      localStorage.removeItem(STORAGE_KEY);
+      return parseStoredData(parsed);
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
+async function saveState(state: AppState): Promise<void> {
+  try {
+    await dbSet(STORAGE_KEY, {
+      version:           STORAGE_VERSION,
+      playerProfiles:    state.playerProfiles,
+      settings:          state.settings,
+      numberOfPlayers:   state.numberOfPlayers,
       selectedPlayerIds: state.selectedPlayerIds,
-    }));
-  } catch { /* */ }
+    } satisfies StoredData);
+  } catch { /* ignore */ }
 }
 
 /* ── Context ── */
-const initialState: AppState = {
+const defaultInitialState: AppState = {
   scene: 'launch',
   numberOfPlayers: 2,
   playerProfiles: [],
@@ -156,15 +180,34 @@ const initialState: AppState = {
   selectedGame: 0,
   settings: defaultSettings,
   gameResults: null,
-  ...loadState(),
 };
 
 interface StoreCtx { state: AppState; dispatch: React.Dispatch<Action>; }
-const Ctx = createContext<StoreCtx>({ state: initialState, dispatch: () => {} });
+const Ctx = createContext<StoreCtx>({ state: defaultInitialState, dispatch: () => {} });
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
-  useEffect(() => { saveState(state); }, [state]);
+  const [state, dispatch] = useReducer(reducer, defaultInitialState);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Load persisted state from IDB once on mount
+  useEffect(() => {
+    loadFromIDB().then(saved => {
+      if (Object.keys(saved).length > 0) {
+        dispatch({ type: 'HYDRATE', payload: saved });
+      }
+      setHydrated(true);
+    });
+  }, []);
+
+  // Persist to IDB on every state change (only after initial hydration)
+  useEffect(() => {
+    if (!hydrated) return;
+    saveState(state);
+  }, [state, hydrated]);
+
+  // Hold rendering until IDB data is available
+  if (!hydrated) return null;
+
   return <Ctx.Provider value={{ state, dispatch }}>{children}</Ctx.Provider>;
 }
 

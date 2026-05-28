@@ -10,26 +10,34 @@ import { audioManager } from '../../engine/audioManager';
 interface ThemePalette {
   bg: string; tileA: string; tileB: string; border: string;
   ladderCol: string; slideCol: string; startCol: string;
+  ladderBg0: string; ladderBg1: string; // tile gradient for ladder tiles
+  slideBg0: string;  slideBg1: string;  // tile gradient for slide tiles
   ladderEmoji: string; slideEmoji: string; slideVerb: string; slideThing: string;
   tileGlow: string;
 }
 const THEMES: Record<string, ThemePalette> = {
   jungle: {
     bg: '#1a3a12', tileA: '#2d5a22', tileB: '#3a7030', border: 'rgba(0,0,0,0.25)',
-    ladderCol: 'rgba(100,200,80,0.75)', slideCol: 'rgba(100,160,60,0.7)', startCol: '#FFD700',
-    ladderEmoji: '🌿', slideEmoji: '💦', slideVerb: 'Slid in mud', slideThing: '💧',
+    ladderCol: 'rgba(80,220,80,0.9)',  slideCol: 'rgba(230,50,50,0.92)', startCol: '#FFD700',
+    ladderBg0: 'rgba(100,255,80,0.38)', ladderBg1: 'rgba(255,220,0,0.28)',
+    slideBg0:  'rgba(255,50,50,0.40)',  slideBg1:  'rgba(220,90,0,0.32)',
+    ladderEmoji: '🌿', slideEmoji: '🐊', slideVerb: 'Croc attack', slideThing: '🐊',
     tileGlow: 'rgba(76,200,60,0.16)',
   },
   desert: {
     bg: '#7a4808', tileA: '#a06218', tileB: '#c07e2a', border: 'rgba(200,140,20,0.2)',
-    ladderCol: 'rgba(255,210,80,0.75)', slideCol: 'rgba(230,140,40,0.75)', startCol: '#FFD700',
-    ladderEmoji: '🌵', slideEmoji: '🪨', slideVerb: 'Sandstorm slide', slideThing: '🏜️',
+    ladderCol: 'rgba(255,220,60,0.9)', slideCol: 'rgba(230,50,50,0.92)', startCol: '#FFD700',
+    ladderBg0: 'rgba(255,230,80,0.38)', ladderBg1: 'rgba(100,220,80,0.28)',
+    slideBg0:  'rgba(255,55,55,0.40)',  slideBg1:  'rgba(200,80,0,0.32)',
+    ladderEmoji: '🌵', slideEmoji: '🦂', slideVerb: 'Scorpion sting', slideThing: '🦂',
     tileGlow: 'rgba(255,200,50,0.16)',
   },
   iceage: {
     bg: '#0d2040', tileA: '#1e4070', tileB: '#2a5490', border: 'rgba(150,220,255,0.18)',
-    ladderCol: 'rgba(120,210,255,0.75)', slideCol: 'rgba(180,230,255,0.75)', startCol: '#80DEEA',
-    ladderEmoji: '❄️', slideEmoji: '🧊', slideVerb: 'Ice slide', slideThing: '🌨️',
+    ladderCol: 'rgba(80,230,200,0.9)', slideCol: 'rgba(230,50,50,0.92)', startCol: '#80DEEA',
+    ladderBg0: 'rgba(80,230,200,0.35)', ladderBg1: 'rgba(180,255,220,0.25)',
+    slideBg0:  'rgba(255,60,60,0.40)',  slideBg1:  'rgba(180,50,200,0.28)',
+    ladderEmoji: '❄️', slideEmoji: '🐺', slideVerb: 'Wolf chase', slideThing: '🐺',
     tileGlow: 'rgba(120,210,255,0.14)',
   },
 };
@@ -117,21 +125,7 @@ export function createGame1(): GameInstance {
   }
 
   function rebuildFootprints() {
-    footprints = [];
-    for (const t of tiles) {
-      if (t.type !== 'ladder' || t.link === undefined) continue;
-      const tgt = tiles[t.link]; if (!tgt) continue;
-      const steps = 5 + Math.floor(Math.random() * 4);
-      for (let s = 0; s <= steps; s++) {
-        const frac = s / steps;
-        footprints.push({
-          x: lerp(t.x, tgt.x, frac) + randRange(-tileSize * 0.1, tileSize * 0.1),
-          y: lerp(t.y, tgt.y, frac) + randRange(-tileSize * 0.1, tileSize * 0.1),
-          age: 0, maxAge: 999,
-          angle: Math.atan2(tgt.y - t.y, tgt.x - t.x) + (s % 2 === 0 ? 0.3 : -0.3),
-        });
-      }
-    }
+    footprints = []; // footprints replaced by richer ladder graphics
   }
 
   function buildBoard(w: number, h: number) {
@@ -348,40 +342,84 @@ export function createGame1(): GameInstance {
       for (let i = 0; i < totalTiles; i++) {
         const t = tiles[i];
         const even = Math.floor(i / gridSize) % 2 === 0;
+        const tx = t.x - tileSize / 2 + 1, ty = t.y - tileSize / 2 + 1, tw = tileSize - 2, th = tileSize - 2;
+
+        // Base checkerboard fill
         ctx.fillStyle = (i + (even ? 0 : 1)) % 2 === 0 ? theme.tileA : theme.tileB;
-        ctx.beginPath(); ctx.roundRect(t.x - tileSize / 2 + 1, t.y - tileSize / 2 + 1, tileSize - 2, tileSize - 2, 4); ctx.fill();
-        ctx.strokeStyle = theme.border; ctx.lineWidth = 1; ctx.stroke();
-        // Tile number
-        ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = `${tileSize * 0.18}px sans-serif`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${i + 1}`, t.x, t.y + tileSize * 0.32);
-        // Special tile glow
+        ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 4); ctx.fill();
+
         if (t.type === 'ladder') {
-          ctx.fillStyle = theme.tileGlow;
-          ctx.beginPath(); ctx.roundRect(t.x - tileSize / 2 + 1, t.y - tileSize / 2 + 1, tileSize - 2, tileSize - 2, 4); ctx.fill();
+          // Bright gold-green gradient fill — clearly positive
+          const lg = ctx.createLinearGradient(tx, ty, tx + tw, ty + th);
+          lg.addColorStop(0, theme.ladderBg0); lg.addColorStop(1, theme.ladderBg1);
+          ctx.fillStyle = lg; ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 4); ctx.fill();
+          // Pulsing gold border
+          const pulse = 0.7 + 0.3 * Math.sin(globalTime * 2.8 + i * 0.6);
+          ctx.strokeStyle = `rgba(255,215,0,${pulse})`; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 4); ctx.stroke();
+        } else if (t.type === 'slide') {
+          // Bright red-orange gradient fill — clearly dangerous
+          const sg = ctx.createLinearGradient(tx, ty, tx + tw, ty + th);
+          sg.addColorStop(0, theme.slideBg0); sg.addColorStop(1, theme.slideBg1);
+          ctx.fillStyle = sg; ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 4); ctx.fill();
+          // Pulsing red border
+          const pulse = 0.7 + 0.3 * Math.sin(globalTime * 3.2 + i * 0.8);
+          ctx.strokeStyle = `rgba(230,50,50,${pulse})`; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 4); ctx.stroke();
+        } else {
+          ctx.strokeStyle = theme.border; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.roundRect(tx, ty, tw, th, 4); ctx.stroke();
         }
-        // Emoji on special tiles
+
+        // Special tile: big centred emoji + directional label
+        if (t.type === 'ladder') {
+          const bob = Math.sin(globalTime * 2.5 + i) * tileSize * 0.03;
+          ctx.font = `${tileSize * 0.44}px sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 0.95;
+          ctx.fillText(theme.ladderEmoji, t.x, t.y - tileSize * 0.1 + bob);
+          ctx.globalAlpha = 1;
+          // ⬆ UP label in gold
+          ctx.font = `bold ${tileSize * 0.17}px 'Fredoka One', cursive`;
+          ctx.fillStyle = '#FFE040';
+          ctx.fillText('⬆ UP!', t.x, t.y + tileSize * 0.32);
+        } else if (t.type === 'slide') {
+          const shake = Math.sin(globalTime * 5 + i) * tileSize * 0.02;
+          ctx.font = `${tileSize * 0.44}px sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.globalAlpha = 0.95;
+          ctx.fillText(theme.slideEmoji, t.x + shake, t.y - tileSize * 0.1);
+          ctx.globalAlpha = 1;
+          // ⬇ DOWN label in red
+          ctx.font = `bold ${tileSize * 0.17}px 'Fredoka One', cursive`;
+          ctx.fillStyle = '#FF6060';
+          ctx.fillText('⬇ BACK!', t.x, t.y + tileSize * 0.32);
+        } else {
+          // Tile number on normal tiles
+          ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.font = `${tileSize * 0.2}px sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(`${i + 1}`, t.x, t.y);
+        }
+
+        // Small tile number in corner for special tiles
         if (t.type !== 'normal') {
-          ctx.font = `${tileSize * 0.32}px sans-serif`;
-          ctx.fillText(t.type === 'ladder' ? theme.ladderEmoji : theme.slideEmoji, t.x, t.y - tileSize * 0.05);
+          ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = `${tileSize * 0.15}px sans-serif`;
+          ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+          ctx.fillText(`${i + 1}`, tx + 4, ty + 3);
         }
-        if (i === 0) { ctx.fillStyle = theme.startCol; ctx.font = `bold ${tileSize * 0.2}px 'Fredoka One', cursive`; ctx.fillText('START', t.x, t.y); }
-        if (i === totalTiles - 1) { ctx.fillStyle = theme.startCol; ctx.font = `bold ${tileSize * 0.2}px 'Fredoka One', cursive`; ctx.fillText('FINISH', t.x, t.y); }
+
+        if (i === 0) { ctx.fillStyle = theme.startCol; ctx.font = `bold ${tileSize * 0.2}px 'Fredoka One', cursive`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('START', t.x, t.y); }
+        if (i === totalTiles - 1) { ctx.fillStyle = theme.startCol; ctx.font = `bold ${tileSize * 0.2}px 'Fredoka One', cursive`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('FINISH', t.x, t.y); }
       }
 
-      // Animated footprint trails along ladders
+      // Subtle gold footprints along ladder paths
       ctx.save();
       for (const fp of footprints) {
-        // Pulsing alpha animation
-        const pulse = 0.35 + 0.25 * Math.sin(globalTime * 2.5 + fp.x * 0.05 + fp.y * 0.03);
+        const pulse = 0.2 + 0.15 * Math.sin(globalTime * 2.5 + fp.x * 0.05 + fp.y * 0.03);
         ctx.globalAlpha = pulse;
         ctx.save();
-        ctx.translate(fp.x, fp.y);
-        ctx.rotate(fp.angle);
-        const fs = tileSize * 0.13;
-        // Draw a simple foot shape (oval + toes)
-        ctx.fillStyle = theme.ladderCol;
+        ctx.translate(fp.x, fp.y); ctx.rotate(fp.angle);
+        const fs = tileSize * 0.1;
+        ctx.fillStyle = 'rgba(255,220,80,0.9)';
         ctx.beginPath(); ctx.ellipse(0, 0, fs * 0.55, fs, 0, 0, Math.PI * 2); ctx.fill();
-        // Toes
         for (let ti = -1; ti <= 1; ti++) {
           ctx.beginPath(); ctx.arc(ti * fs * 0.35, -fs * 1.0, fs * 0.2, 0, Math.PI * 2); ctx.fill();
         }
@@ -390,29 +428,132 @@ export function createGame1(): GameInstance {
       ctx.globalAlpha = 1;
       ctx.restore();
 
-      // Slide/setback paths (wobbly dashed lines)
+      // Connection paths — ladder rungs (gold) and slide arrows (red)
       tiles.forEach(t => {
         if (t.link === undefined) return;
         const tgt = tiles[t.link]; if (!tgt) return;
-        ctx.strokeStyle = t.type === 'ladder' ? theme.ladderCol : theme.slideCol;
-        ctx.lineWidth = t.type === 'slide' ? 4 : 2;
-        if (t.type === 'slide') {
-          // Wobbly slide path
-          ctx.setLineDash([8, 6]);
+        const angle = Math.atan2(tgt.y - t.y, tgt.x - t.x);
+        const perp = angle + Math.PI / 2;
+        const dist = Math.hypot(tgt.x - t.x, tgt.y - t.y);
+
+        if (t.type === 'ladder') {
+          // ── Rich 3D cartoon ladder ────────────────────────────────────────
+          // Offset start/end toward tile edges so rails don't cover the character
+          const edgePush = tileSize * 0.3;
+          const startX = t.x   + Math.cos(angle) * edgePush;
+          const startY = t.y   + Math.sin(angle) * edgePush;
+          const endX   = tgt.x - Math.cos(angle) * edgePush;
+          const endY   = tgt.y - Math.sin(angle) * edgePush;
+          const rail = tileSize * 0.18;  // half-gap between rails (wider)
+          const l1x = startX + Math.cos(perp)*rail, l1y = startY + Math.sin(perp)*rail;
+          const l2x = endX   + Math.cos(perp)*rail, l2y = endY   + Math.sin(perp)*rail;
+          const r1x = startX - Math.cos(perp)*rail, r1y = startY - Math.sin(perp)*rail;
+          const r2x = endX   - Math.cos(perp)*rail, r2y = endY   - Math.sin(perp)*rail;
+          const rungExt  = rail + tileSize * 0.04; // rungs extend slightly past rails
+          const innerDist = Math.hypot(endX - startX, endY - startY);
+          const numRungs = Math.max(3, Math.floor(innerDist / (tileSize * 0.48)));
+
+          ctx.save();
+          ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash([]);
+
+          // 1. Wide soft glow halo around whole ladder
+          ctx.strokeStyle = 'rgba(140,255,100,0.22)'; ctx.lineWidth = 22;
+          ctx.beginPath(); ctx.moveTo(l1x, l1y); ctx.lineTo(l2x, l2y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(r1x, r1y); ctx.lineTo(r2x, r2y); ctx.stroke();
+
+          // 2. Rail dark outlines (creates cartoon border + shadow)
+          ctx.strokeStyle = 'rgba(50,30,0,0.88)'; ctx.lineWidth = 12;
+          ctx.beginPath(); ctx.moveTo(l1x, l1y); ctx.lineTo(l2x, l2y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(r1x, r1y); ctx.lineTo(r2x, r2y); ctx.stroke();
+
+          // 3. Rail main colour — warm amber-brown (bamboo/wood feel)
+          ctx.strokeStyle = '#C89020'; ctx.lineWidth = 8;
+          ctx.beginPath(); ctx.moveTo(l1x, l1y); ctx.lineTo(l2x, l2y); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(r1x, r1y); ctx.lineTo(r2x, r2y); ctx.stroke();
+
+          // 4. Rail highlight — bright strip on inner edge
+          const hlOff = 2.5;
+          ctx.strokeStyle = 'rgba(255,235,140,0.8)'; ctx.lineWidth = 3;
           ctx.beginPath();
-          const dx = tgt.x - t.x, dy = tgt.y - t.y;
-          const cx = (t.x + tgt.x) / 2 + dy * 0.15 * Math.sin(globalTime * 1.5);
-          const cy = (t.y + tgt.y) / 2 - dx * 0.15 * Math.sin(globalTime * 1.5);
-          ctx.moveTo(t.x, t.y); ctx.quadraticCurveTo(cx, cy, tgt.x, tgt.y); ctx.stroke();
+          ctx.moveTo(l1x - Math.cos(perp)*hlOff, l1y - Math.sin(perp)*hlOff);
+          ctx.lineTo(l2x - Math.cos(perp)*hlOff, l2y - Math.sin(perp)*hlOff); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(r1x + Math.cos(perp)*hlOff, r1y + Math.sin(perp)*hlOff);
+          ctx.lineTo(r2x + Math.cos(perp)*hlOff, r2y + Math.sin(perp)*hlOff); ctx.stroke();
+
+          // 5. Rung dark outlines (slightly wider, extend past rails for depth)
+          ctx.strokeStyle = 'rgba(50,30,0,0.88)'; ctx.lineWidth = 11;
+          for (let r = 1; r < numRungs; r++) {
+            const frac = r / numRungs;
+            const cx = lerp(startX, endX, frac), cy = lerp(startY, endY, frac);
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(perp)*rungExt, cy + Math.sin(perp)*rungExt);
+            ctx.lineTo(cx - Math.cos(perp)*rungExt, cy - Math.sin(perp)*rungExt); ctx.stroke();
+          }
+
+          // 6. Rung main colour — bright yellow (high contrast with amber rails)
+          ctx.strokeStyle = '#FFE040'; ctx.lineWidth = 7;
+          for (let r = 1; r < numRungs; r++) {
+            const frac = r / numRungs;
+            const cx = lerp(startX, endX, frac), cy = lerp(startY, endY, frac);
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(perp)*rungExt, cy + Math.sin(perp)*rungExt);
+            ctx.lineTo(cx - Math.cos(perp)*rungExt, cy - Math.sin(perp)*rungExt); ctx.stroke();
+          }
+
+          // 7. Rung top highlight (edge-lighting)
+          ctx.strokeStyle = 'rgba(255,255,210,0.65)'; ctx.lineWidth = 2.5;
+          for (let r = 1; r < numRungs; r++) {
+            const frac = r / numRungs;
+            const edgeOff = tileSize * 0.012;
+            const cx = lerp(startX, endX, frac) - Math.cos(angle)*edgeOff;
+            const cy = lerp(startY, endY, frac) - Math.sin(angle)*edgeOff;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(perp)*rail, cy + Math.sin(perp)*rail);
+            ctx.lineTo(cx - Math.cos(perp)*rail, cy - Math.sin(perp)*rail); ctx.stroke();
+          }
+
+          // 8. End caps — filled circles at bottom of each rail
+          for (const [ex, ey] of [[l1x, l1y], [r1x, r1y]] as [number,number][]) {
+            ctx.fillStyle = 'rgba(50,30,0,0.85)'; ctx.beginPath(); ctx.arc(ex, ey, 7, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#C89020';            ctx.beginPath(); ctx.arc(ex, ey, 5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,235,140,0.8)'; ctx.beginPath(); ctx.arc(ex - 1.5, ey - 1.5, 2, 0, Math.PI*2); ctx.fill();
+          }
+
+          ctx.restore();
+        } else {
+          // ── Draw vivid red slide: thick curved arrow ──────────────────────
+          const wob = Math.sin(globalTime * 2.2) * tileSize * 0.18;
+          const cxM = (t.x + tgt.x) / 2 + Math.cos(perp) * wob;
+          const cyM = (t.y + tgt.y) / 2 + Math.sin(perp) * wob;
+
+          ctx.save();
+          ctx.shadowColor = 'rgba(230,50,50,0.7)'; ctx.shadowBlur = 10;
+          ctx.strokeStyle = theme.slideCol; ctx.lineWidth = 5; ctx.setLineDash([]);
+          ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.quadraticCurveTo(cxM, cyM, tgt.x, tgt.y); ctx.stroke();
+          // White inner line for contrast
+          ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+          ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.quadraticCurveTo(cxM, cyM, tgt.x, tgt.y); ctx.stroke();
           ctx.setLineDash([]);
-          // Splash dots along slide
-          for (let s = 0; s < 3; s++) {
-            const frac = (s + 1) / 4;
-            const sx = lerp(t.x, tgt.x, frac) + Math.sin(globalTime * 3 + s) * 4;
-            const sy = lerp(t.y, tgt.y, frac) + Math.cos(globalTime * 3 + s) * 4;
-            ctx.globalAlpha = 0.4 + 0.2 * Math.sin(globalTime * 4 + s * 2);
-            ctx.font = `${tileSize * 0.18}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(theme.slideEmoji, sx, sy);
+          ctx.restore();
+          // Arrow at destination (bottom of slide)
+          ctx.save();
+          ctx.translate(tgt.x, tgt.y);
+          ctx.rotate(angle + Math.PI / 2);
+          const as = tileSize * 0.18;
+          ctx.fillStyle = '#FF3333';
+          ctx.shadowColor = 'rgba(230,50,50,0.8)'; ctx.shadowBlur = 10;
+          ctx.beginPath(); ctx.moveTo(0, as); ctx.lineTo(as * 0.6, -as * 0.3); ctx.lineTo(-as * 0.6, -as * 0.3); ctx.closePath(); ctx.fill();
+          ctx.restore();
+          // Danger emoji pulses along slide path
+          for (let s = 0; s < 2; s++) {
+            const frac = (s + 1) / 3;
+            const t2 = frac;
+            const ex = (1-t2)*(1-t2)*t.x + 2*(1-t2)*t2*cxM + t2*t2*tgt.x;
+            const ey = (1-t2)*(1-t2)*t.y + 2*(1-t2)*t2*cyM + t2*t2*tgt.y;
+            ctx.globalAlpha = 0.55 + 0.3 * Math.sin(globalTime * 4 + s * 2.5);
+            ctx.font = `${tileSize * 0.22}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(theme.slideEmoji, ex, ey);
           }
           ctx.globalAlpha = 1;
         }

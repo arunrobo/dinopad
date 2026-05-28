@@ -1,24 +1,31 @@
 {
   "name": "dino-party-pad",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "gen-icons": "node scripts/gen-icons.mjs",
+    "gen-screenshots": "node scripts/gen-screenshots.mjs",
+    "predeploy": "npm version patch --no-git-tag-version",
     "deploy": "npm run build && firebase deploy --only hosting"
   },
   "dependencies": {
+    "@fontsource/fredoka-one": "^5.2.5",
+    "@fontsource/nunito": "^5.2.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "sharp": "^0.34.5",
     "typescript": "^5.5.3",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

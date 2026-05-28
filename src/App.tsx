@@ -1,5 +1,6 @@
 import { useStore } from './state/store';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { dbGet, dbSet, dbDelete } from './engine/db';
 import Launch from './scenes/Launch';
 import Profiles from './scenes/Profiles';
 import SetupPlayers from './scenes/SetupPlayers';
@@ -8,6 +9,7 @@ import TutorialOverlay from './scenes/TutorialOverlay';
 import GameLayout from './scenes/GameLayout';
 import Results from './scenes/Results';
 import ParentalLock from './scenes/ParentalLock';
+import UpdatePrompt from './ui/UpdatePrompt';
 import './App.css';
 
 const MIN_WIDTH = 768;
@@ -16,7 +18,7 @@ const MIN_HEIGHT = 500;
 const SESSION_LIMIT_MS  = 15 * 60 * 1000; // 15 minutes per session
 const COOLDOWN_MS       = 30 * 60 * 1000; // 30 minute cooldown
 const LOCK_STORAGE_KEY  = 'dino_locked_until';
-const SESSION_START_KEY = 'dino_session_start'; // sessionStorage — survives refresh, not new tab
+const SESSION_START_KEY = 'dino_session_start'; // IDB — survives refresh, cleared on unlock
 
 type ScreenState = 'ok' | 'tooSmall' | 'portrait';
 
@@ -44,29 +46,61 @@ export default function App() {
   const screenState = useScreenState();
 
   // ── Parental lock state ──────────────────────────────────────────────────
-  // Session start: persists across refreshes via sessionStorage (new tab = new session)
-  const sessionStartRef = useRef<number>((() => {
-    const stored = sessionStorage.getItem(SESSION_START_KEY);
-    if (stored) return Number(stored);
-    const now = Date.now();
-    sessionStorage.setItem(SESSION_START_KEY, String(now));
-    return now;
-  })());
+  // Session start stored in IDB (survives page refresh; cleared on parental unlock)
+  const sessionStartRef = useRef<number>(Date.now()); // optimistic default; updated from IDB
+
+  // lockChecked gates rendering — prevents a brief flash of unlocked content on startup
+  const [lockChecked, setLockChecked] = useState(false);
 
   // pendingLock = timer elapsed but waiting for game/results to finish before locking
   const [pendingLock, setPendingLock] = useState(false);
 
   // activeLock = lock screen is showing
-  const [activeLock, setActiveLock] = useState(() => {
-    const v = localStorage.getItem(LOCK_STORAGE_KEY);
-    return v ? Date.now() < Number(v) : false;
-  });
+  const [activeLock, setActiveLock] = useState(false);
 
   // lockedUntil = timestamp when cooldown ends
-  const [lockedUntil, setLockedUntil] = useState<number>(() => {
-    const v = localStorage.getItem(LOCK_STORAGE_KEY);
-    return v ? Number(v) : 0;
-  });
+  const [lockedUntil, setLockedUntil] = useState(0);
+
+  // Load session start + lock state from IDB once on mount
+  useEffect(() => {
+    (async () => {
+      // ── Session start ──
+      let sessionStart = await dbGet<number>(SESSION_START_KEY);
+      // One-time migration from sessionStorage
+      if (sessionStart === undefined) {
+        const legacy = sessionStorage.getItem(SESSION_START_KEY);
+        if (legacy) {
+          sessionStart = Number(legacy);
+          await dbSet(SESSION_START_KEY, sessionStart);
+          sessionStorage.removeItem(SESSION_START_KEY);
+        }
+      }
+      if (sessionStart !== undefined) {
+        sessionStartRef.current = sessionStart;
+      } else {
+        await dbSet(SESSION_START_KEY, sessionStartRef.current);
+      }
+
+      // ── Lock state ──
+      let until = await dbGet<number>(LOCK_STORAGE_KEY);
+      // One-time migration from localStorage
+      if (until === undefined) {
+        const legacy = localStorage.getItem(LOCK_STORAGE_KEY);
+        if (legacy) {
+          until = Number(legacy);
+          await dbSet(LOCK_STORAGE_KEY, until);
+          localStorage.removeItem(LOCK_STORAGE_KEY);
+        }
+      }
+      if (until && Date.now() < until) {
+        setActiveLock(true);
+        setLockedUntil(until);
+      }
+
+      setLockChecked(true);
+    })();
+  }, []);
+
 
   // Poll every 10 s to check if session limit reached
   useEffect(() => {
@@ -84,16 +118,16 @@ export default function App() {
     if (!pendingLock || activeLock) return;
     if (state.scene === 'game' || state.scene === 'results') return;
     const until = Date.now() + COOLDOWN_MS;
-    localStorage.setItem(LOCK_STORAGE_KEY, String(until));
+    dbSet(LOCK_STORAGE_KEY, until);
     setLockedUntil(until);
     setActiveLock(true);
     setPendingLock(false);
   }, [pendingLock, activeLock, state.scene]);
 
   const handleUnlock = useCallback(() => {
-    localStorage.removeItem(LOCK_STORAGE_KEY);
+    dbDelete(LOCK_STORAGE_KEY);
     const now = Date.now();
-    sessionStorage.setItem(SESSION_START_KEY, String(now)); // fresh 15-min session
+    dbSet(SESSION_START_KEY, now); // fresh 15-min session
     sessionStartRef.current = now;
     setActiveLock(false);
     setPendingLock(false);
@@ -116,6 +150,9 @@ export default function App() {
   const sessionSecs = Math.floor((sessionRemaining % 60_000) / 1_000);
   const sessionLabel = `${sessionMins}:${String(sessionSecs).padStart(2, '0')}`;
   const sessionColor = sessionFraction > 0.4 ? '#4CAF50' : sessionFraction > 0.15 ? '#FF9800' : '#f44336';
+
+  // Hold rendering until IDB lock data is confirmed (prevents lock-bypass flash on page load)
+  if (!lockChecked) return null;
 
   const scene = (() => {
     switch (state.scene) {
@@ -183,6 +220,9 @@ export default function App() {
           )}
         </>
       )}
+      {/* Update prompt — shown mid-game; auto-reloads on menu screens */}
+      <UpdatePrompt scene={state.scene} />
+
       {/* Parental lock — sits above game content, below device-check overlays */}
       {activeLock && screenState === 'ok' && (
         <ParentalLock lockedUntil={lockedUntil} totalCooldownMs={COOLDOWN_MS} onUnlock={handleUnlock} />

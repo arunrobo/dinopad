@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../state/store';
 import { audioManager } from '../engine/audioManager';
 import Modal from '../ui/Modal';
@@ -8,6 +8,18 @@ export default function Launch() {
   const { state, dispatch } = useStore();
   const [showSettings, setShowSettings] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(audioManager.unlocked);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const goOnline  = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online',  goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online',  goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
 
   const unlock = async () => {
     await audioManager.init();
@@ -88,6 +100,26 @@ export default function Launch() {
           borderRadius: '12px', cursor: 'pointer', fontSize: '1rem', animation: 'pulse 2s ease-in-out infinite',
         }}>🔊 Tap to enable sound</div>
       )}
+
+      {/* Version + online/offline badge */}
+      <div style={{
+        position: 'fixed', bottom: 12, right: 14,
+        display: 'flex', alignItems: 'center', gap: 6,
+        background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)',
+        color: 'rgba(255,255,255,0.85)', fontSize: '0.72rem',
+        padding: '4px 10px', borderRadius: 20,
+        fontFamily: "'Nunito', sans-serif", letterSpacing: '0.03em',
+        userSelect: 'none', pointerEvents: 'none',
+      }}>
+        <span style={{
+          display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+          background: isOnline ? '#4ade80' : '#f87171',
+          boxShadow: isOnline ? '0 0 6px #4ade80' : '0 0 6px #f87171',
+        }} />
+        <span>{isOnline ? 'Online' : 'Offline'}</span>
+        <span style={{ opacity: 0.5 }}>·</span>
+        <span>v{__APP_VERSION__}</span>
+      </div>
 
       <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Settings">
         <SettingsPanel />
