@@ -32,6 +32,7 @@ export interface GameInstance {
   update(dt: number, inputs: Map<Side, ButtonInput>): void;
   render(ctx: CanvasRenderingContext2D, w: number, h: number): void;
   getCurrentTurnSide(): Side;
+  shouldPauseTurnTimer?(): boolean;
   getTurnMessage?(): string;
   getPlayerStates(): PlayerInGame[];
   isFinished(): boolean;

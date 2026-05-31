@@ -77,6 +77,7 @@ export default function GameLayout() {
       if (!g) return;
 
       const curSide = g.getCurrentTurnSide();
+      const pauseTurnTimer = g.shouldPauseTurnTimer?.() ?? false;
 
       // Zero non-active inputs
       const allInputs = inputManager.getAllInputs();
@@ -87,7 +88,7 @@ export default function GameLayout() {
       }
 
       // Turn timer
-      if (settings.turnTimer > 0 && !g.isFinished()) {
+      if (settings.turnTimer > 0 && !g.isFinished() && !pauseTurnTimer) {
         turnTimerRef.current -= dt;
         if (turnTimerRef.current <= 5 && turnTimerRef.current > 4.9) audioManager.play('reminder');
         if (turnTimerRef.current <= 3) audioManager.play('tick');
@@ -96,6 +97,8 @@ export default function GameLayout() {
           filtered.set(curSide, { pressed: true, justPressed: true, justReleased: false, holdTime: 0 });
           turnTimerRef.current = settings.turnTimer;
         }
+      } else if (pauseTurnTimer) {
+        turnTimerRef.current = settings.turnTimer;
       }
 
       g.update(dt, filtered);
